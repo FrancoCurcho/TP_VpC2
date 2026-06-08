@@ -1,0 +1,17 @@
+# Entorno
+.venv/
+__pycache__/
+*.pyc
+
+# Artefactos de entrenamiento de ultralytics (los resultados finales van a models/)
+runs/
+FinalV2-1/
+*.zip
+
+# Pesos base descargados (yolo11m.pt, yolo26m.pt, etc.) — se bajan solos
+/yolo*.pt
+/rtdetr*.pt
+
+# Credenciales
+.env
+.idea

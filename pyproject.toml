@@ -1,7 +1,7 @@
 [project]
 name = "tp-vpc2"
 version = "0.1.0"
-description = "Add your description here"
+description = "Detección de jugadores y estimación de posesión de pelota en video de fútbol (CEIA, VPC II, Grupo 7)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,4 +11,14 @@ dependencies = [
     "pandas>=3.0.3",
     "roboflow>=1.3.9",
     "ultralytics>=8.4.60",
+    "lap>=0.5.12",
+    "scikit-learn>=1.7.0",
+    "supervision>=0.26.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/futbol_vpc"]
