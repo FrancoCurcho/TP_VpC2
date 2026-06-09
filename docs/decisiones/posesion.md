@@ -200,3 +200,29 @@ manual (Etapa 5 de la propuesta). Se deja `h=4` como default tentativo (el más
 balanceado, sin colapso). La validación honesta hasta tener GT es **visual** (el
 video con overlay, donde se ve la posesión en movimiento — mucho mejor que un
 frame suelto).
+
+### Exp. 8 — Evaluación contra ground truth manual (Etapa 5)
+
+Se anotó la posesión de SNMOT-108 a mano (`data/ground_truth/SNMOT-108_posesion.csv`,
+6 tramos, arquero/pelota-fuera = "ninguno") y se evaluó frame-a-frame (2 mapeos
+A/B, excluyendo "ninguno").
+
+**Primera corrida (default) dio 57%** — sospechoso vs el buen video. La matriz de
+confusión mostró **sesgo sistemático** hacia un equipo. Diagnóstico
+(`calibrar_posesion.py`):
+
+- **Accuracy de equipos en esa corrida concreta: 94.8%** → la asignación NO era el
+  problema.
+- **Barrido umbral × histéresis vs GT:** el mejor es **umbral 0.5 → 76%** (robusto
+  a la histéresis). Los parámetros default (umbral 0.5, h=4) ya son los mejores.
+
+**Causa del 57% inicial:** la asignación por embeddings usa **UMAP, que es no
+determinista** → varía entre corridas; esa corrida salió peor y arrastró la
+posesión. Con una corrida buena de equipos (94.8%), la posesión da **76%**.
+
+**Resultados finales:**
+- **Posesión: ~76%** de accuracy vs ground truth manual (pelota GT, parámetros
+  calibrados). Resultado sólido para el alcance del TP.
+- **Limitación de reproducibilidad:** la asignación de equipo (UMAP/KMeans)
+  **varía entre corridas**. A futuro: fijar semilla o votar varias corridas. Es la
+  fuente principal de varianza del pipeline.

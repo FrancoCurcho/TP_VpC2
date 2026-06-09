@@ -1,0 +1,7 @@
+frame_inicio,frame_fin,equipo
+1,244,ninguno
+245,355,equipo_A
+356,478,equipo_B
+479,529,equipo_A
+530,619,equipo_B
+620,750,ninguno
