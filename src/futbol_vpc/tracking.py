@@ -15,7 +15,8 @@ from . import config
 from .detection import Detection
 
 
-def trackear(modelo, frames, conf=None, iou=None, device=None, tracker="bytetrack.yaml"):
+def trackear(modelo, frames, conf=None, iou=None, device=None, imgsz=None,
+             tracker="bytetrack.yaml"):
     """Corre detección + ByteTrack sobre una secuencia de frames.
 
     Args:
@@ -23,6 +24,8 @@ def trackear(modelo, frames, conf=None, iou=None, device=None, tracker="bytetrac
         frames: iterable de frames BGR (numpy arrays), en orden temporal.
         conf, iou: umbrales (default: config.CONF_THRESHOLD / IOU_THRESHOLD).
         device: 'mps' (Mac), 0 (GPU), 'cpu', o None.
+        imgsz: resolución de inferencia (ej. 1280 para detectar mejor la pelota).
+            None usa el default del modelo (640).
         tracker: config YAML de ultralytics ('bytetrack.yaml' o 'botsort.yaml').
 
     Returns:
@@ -30,6 +33,7 @@ def trackear(modelo, frames, conf=None, iou=None, device=None, tracker="bytetrac
     """
     conf = config.CONF_THRESHOLD if conf is None else conf
     iou = config.IOU_THRESHOLD if iou is None else iou
+    kwargs = {} if imgsz is None else {"imgsz": imgsz}
 
     por_frame = []
     for frame in frames:
@@ -41,6 +45,7 @@ def trackear(modelo, frames, conf=None, iou=None, device=None, tracker="bytetrac
             iou=iou,
             device=device,
             verbose=False,
+            **kwargs,
         )[0]
         nombres = resultado.names
 

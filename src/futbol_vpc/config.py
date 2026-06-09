@@ -23,10 +23,13 @@ OUTPUTS_DIR = ROOT / "outputs"
 CLASSES = ["ball", "goalkeeper", "player", "referee"]
 
 # --- Umbrales del pipeline ------------------------------------------------
-# Distancia (en px) máxima jugador-pelota para considerar posesión.
-POSSESSION_DIST_THRESHOLD = 50
-# Ventana (en frames) para el suavizado temporal de la posesión.
-POSSESSION_SMOOTHING_WINDOW = 5
+# Umbral de posesión: distancia pies-pelota NORMALIZADA por la altura del bbox
+# del jugador (robusto a la perspectiva). A calibrar con experimentos.
+POSSESSION_DIST_REL = 0.5
+# Histéresis: nº de eventos de control sostenidos del otro equipo para que la
+# posesión cambie (filtra disputas/parpadeo). Default tentativo — la calibración
+# objetiva requiere ground truth de posesión (anotación manual, Etapa 5).
+POSSESSION_HYSTERESIS = 4
 # Confianza e IoU por defecto para la inferencia del detector.
 CONF_THRESHOLD = 0.5
 IOU_THRESHOLD = 0.5
