@@ -42,6 +42,7 @@ data/videos/         Videos de prueba (gol.mp4)
 data/ground_truth/   Anotaciones de posesión frame a frame (evaluación)
 outputs/             Videos con overlay y métricas generadas
 docs/                Propuesta del trabajo
+  decisiones/        Registro de decisiones (modelo, dataset, detección y asignación)
 ```
 
 ## Dataset

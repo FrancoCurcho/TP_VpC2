@@ -1,3 +1,6 @@
+# macOS
+.DS_Store
+
 # Entorno
 .venv/
 __pycache__/
@@ -11,6 +14,12 @@ FinalV2-1/
 # Pesos base descargados (yolo11m.pt, yolo26m.pt, etc.) — se bajan solos
 /yolo*.pt
 /rtdetr*.pt
+
+# Descarga completa de SoccerNet (pesada) — solo versionamos el clip elegido
+data/soccernet/
+
+# Salidas con frames de SoccerNet dibujados → NDA, no van al repo público
+outputs/
 
 # Credenciales
 .env
