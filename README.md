@@ -8,152 +8,128 @@ Facundo Rivas · Franco Curcho · Juan Ignacio Teich
 
 ## Objetivo
 
-Construir un pipeline de visión por computadora que, a partir de video de
-fútbol, detecte jugadores/árbitro/pelota, asigne cada jugador a su equipo,
-mantenga identidades estables en el tiempo y estime la **posesión de la pelota**,
+Construir un pipeline de visión por computadora que, a partir de video de fútbol,
+detecte jugadores/árbitro/pelota, asigne cada jugador a su equipo, mantenga
+identidades estables en el tiempo y estime la **posesión de la pelota**,
 produciendo métricas agregadas y un video con overlay que las visualiza.
 
-## Pipeline (3 etapas)
+## Pipeline
 
 ```
-Video ─▶ [1] Detección (YOLO)          ─▶ [2] Tracking (ByteTrack) ─▶ [3] Posesión ─▶ Métricas + Video overlay
-            + Asignación de equipo (HSV)        IDs estables             jugador más      % posesión, cambios,
-                                                                          cercano a la     duración de secuencias
-                                                                          pelota + suavizado
+Video ─▶ [1] Detección ─▶ [2] Tracking ─▶ Asignación de equipo ─▶ [3] Posesión ─▶ Métricas + Overlay
+            (YOLO26m)      (ByteTrack)      (embeddings, por track)   (jugador más    % posesión,
+                            IDs estables                               cercano +       cambios, duración
+                                                                       hold/histéresis)
 ```
 
 | Etapa | Módulo | Estado |
 |---|---|---|
-| 1 · Detección por frame | `detection.py` | ✅ modelo entrenado (ver `models/`) |
-| 1 · Asignación de equipo (HSV) | `team_assign.py` | ⏳ pendiente |
-| 2 · Tracking (ByteTrack) | `tracking.py` | ⏳ pendiente |
-| 3 · Posesión + suavizado | `possession.py` | ⏳ pendiente |
-| 3 · Métricas agregadas | `metrics.py` | ⏳ pendiente |
-| 3 · Video con overlay | `video.py` | ⏳ pendiente |
+| 1 · Detección por frame | `detection.py` | ✅ YOLO26m (mAP@50 ≈ 0.95) |
+| 2 · Tracking (ByteTrack) | `tracking.py` | ✅ IDs estables |
+| · Asignación de equipo | `team_assign.py` | ✅ embeddings SigLIP por track (92-98%) |
+| 3 · Posesión | `possession.py` | ✅ jugador más cercano + hold/histéresis (~76%) |
+| 3 · Métricas | `metrics.py` | ✅ % posesión, cambios, duración |
+| 3 · Video con overlay | `video.py` | ✅ genera mp4 |
+
+> **Desviaciones de la propuesta (con respaldo experimental — ver `docs/decisiones/`):**
+> la asignación de equipo se hace con **embeddings** (no clustering HSV, que dio
+> ~60%); el suavizado de posesión es **hold + histéresis** (no ventana); y el
+> **tracking corre antes** de la asignación de equipo (la agregación por track lo
+> requiere).
+
+## Resultados
+
+| Componente | Resultado | Validación |
+|---|---|---|
+| Detección | mAP@50 0.95 / mAP@50-95 0.56 | comparación de 3 modelos |
+| Tracking | IDs estables, 0 fragmentación | conteo de IDs |
+| **Asignación de equipo** | **92-98%** | vs `gameinfo.ini` de SoccerNet |
+| **Posesión** | **~76%** | vs ground truth **manual** |
+| Detección de pelota | 25% (limitación) | vs GT (pelota presente 99%) |
+
+**Limitaciones conocidas:** (1) la **detección de la pelota** es el cuello del
+sistema en vivo (objeto chico, domain gap); (2) la asignación de equipo (UMAP)
+**varía entre corridas** — principal fuente de varianza. Detalle en
+`docs/decisiones/`.
 
 ## Estructura del repo
 
 ```
-src/futbol_vpc/      Paquete Python con la lógica del pipeline (un módulo por etapa)
-notebooks/           Notebooks finos que orquestan y muestran resultados
-  00_train_*_legacy  Entrenamientos previos (YOLO11x, YOLO26m) — referencia
-models/              Modelos entrenados: best.pt + results.csv + gráficos por modelo
-data/videos/         Videos de prueba (gol.mp4)
-data/ground_truth/   Anotaciones de posesión frame a frame (evaluación)
-outputs/             Videos con overlay y métricas generadas
-docs/                Propuesta del trabajo
-  decisiones/        Registro de decisiones (modelo, dataset, detección y asignación)
+src/futbol_vpc/      Paquete Python — un módulo por etapa del pipeline
+notebooks/           00_train_*_legacy, 01_train_detector, 02_compare_models
+models/              Modelos entrenados (best.pt + results.csv + gráficos)
+scripts/             Descarga, pruebas, validación, anotación y evaluación
+data/videos/         gol.mp4 (prueba visual)
+data/ground_truth/   Anotaciones de posesión (CSV de tramos) — evaluación
+data/soccernet/      Descarga de SoccerNet-Tracking (gitignored, NDA)
+outputs/             Videos/imágenes generados (gitignored, NDA)
+docs/                Propuesta + decisiones/ (registro de experimentos)
 ```
 
-## Dataset
+## Decisiones y experimentos
 
-Se entrena sobre un dataset de fútbol alojado en **Roboflow**
-(`footbaldetection-tiny4/finalv2`), con 4 clases: `ball`, `goalkeeper`,
-`player`, `referee`. La descarga requiere una API key de Roboflow (ver abajo).
+Todo el recorrido (enfoques probados, resultados medidos, decisiones) está en
+**`docs/decisiones/`**:
+- [`modelo.md`](docs/decisiones/modelo.md) — comparación de modelos, hiperparámetros.
+- [`dataset.md`](docs/decisiones/dataset.md) — Roboflow (train) + SoccerNet (eval).
+- [`deteccion-y-asignacion.md`](docs/decisiones/deteccion-y-asignacion.md) — color → DBSCAN → embeddings.
+- [`posesion.md`](docs/decisiones/posesion.md) — modelo de posesión, hold/histéresis, evaluación.
 
-## Modelos y comparación
+## Datasets
 
-Se comparan tres arquitecturas de detección, **todas en tamaño `m`** para que la
-comparación sea justa (mismo tamaño, mismo `data.yaml`, mismas épocas):
-
-- **YOLO11m** (CNN)
-- **YOLO26m** (CNN)
-- **YOLOv8m** (CNN, baseline clásico)
-
-Métricas de comparación: mAP@50 / mAP@50-95 (global y por clase, con foco en
-`ball`) y FPS de inferencia. El modelo ganador se usa en el resto del pipeline;
-si la pelota queda floja, el lever es subir `imgsz` (640 → 1280) antes que el
-tamaño del modelo.
-
-> Nota: en `models/yolo11x/` quedan los resultados de un entrenamiento previo en
-> tamaño `x` (extra-large), conservado como referencia.
+- **Entrenamiento (detección):** dataset de Roboflow `footbaldetection-tiny4/finalv2`,
+  4 clases (`ball`, `goalkeeper`, `player`, `referee`).
+- **Evaluación:** **SoccerNet-Tracking** (clips de 30s con anotaciones de tracking
+  + equipo). Bajo NDA → no se versiona; se reproduce con `scripts/download_soccernet.py`.
 
 ## Cómo correr
 
 ### Instalación local (Mac / Linux)
 
-Dependencias gestionadas con [`uv`](https://docs.astral.sh/uv/):
+Dependencias con [`uv`](https://docs.astral.sh/uv/) (instala también el paquete
+`futbol_vpc` editable y el stack de embeddings — torch, transformers, umap, sports):
 
 ```shell
 uv sync
-uv run ipython kernel install --user --env VIRTUAL_ENV $(pwd)/.venv --name=tp_vpc2
 ```
 
-Esto instala también el paquete `futbol_vpc` en modo editable, así que desde
-cualquier notebook podés `from futbol_vpc import detection, tracking, ...`.
+La Mac (Apple Silicon) sirve para **desarrollo, inferencia y el pipeline** (MPS).
+El **entrenamiento** del detector se hace en Colab (GPU NVIDIA).
 
-La Mac (Apple Silicon) sirve para **desarrollo e inferencia** (backend MPS). El
-**entrenamiento** conviene hacerlo en Colab (GPU NVIDIA, más rápido y consistente).
-
-### Entrenamiento en Google Colab
-
-El entrenamiento se hace en Colab (GPU NVIDIA). **No hace falta clonar el repo**:
-entrenar solo necesita `ultralytics` + el dataset de Roboflow. El paquete
-`futbol_vpc` (pipeline, etapas 2-3) se corre local en la Mac, no acá.
-
-**1. Abrir el notebook en Colab.** Dos opciones:
-- *Desde GitHub:* en Colab → `Archivo → Abrir cuaderno → pestaña GitHub` →
-  autorizar el acceso → elegir el repo → abrir `notebooks/02_compare_models.ipynb`.
-  (Funciona con repos privados vía OAuth, sin tokens.)
-- *Subiéndolo:* bajar el `.ipynb` y en Colab → `Archivo → Subir cuaderno`.
-
-**2. API key de Roboflow.** Ya viene puesta en el notebook (`ROBOFLOW_API_KEY`),
-así que no hay que configurar nada. Si la regeneran en Roboflow, actualizar ese
-valor en la celda.
-
-**3. Bajar el dataset y entrenar.** El notebook recorre los 3 modelos
-(`yolo11m.pt`, `yolo26m.pt`, `yolov8m.pt`) en un solo run:
-
-```python
-!pip install ultralytics roboflow
-
-from roboflow import Roboflow
-rf = Roboflow(api_key=os.environ["ROBOFLOW_API_KEY"])
-dataset = rf.workspace("footbaldetection-tiny4").project("finalv2").version(1).download("yolo11")
-
-from ultralytics import YOLO
-model = YOLO("yolo11m.pt")          # <-- cambiar por modelo: yolo11m / yolo26m / yolov8m
-model.train(
-    data="FinalV2-1/data.yaml",
-    epochs=80,
-    imgsz=640,                       # subir a 1280 solo en el modelo ganador si la pelota queda floja
-    hsv_s=0.5, hsv_v=0.5,
-    translate=0.1, scale=0.6, perspective=0.0005, shear=40, fliplr=0.5,
-    exist_ok=True,
-)
-```
-
-**4. Guardar resultados.** Montar Drive y copiar ahí los artefactos del run:
-
-```python
-from google.colab import drive; drive.mount('/content/drive')
-import shutil, os
-destino = "/content/drive/MyDrive/TP_VpC2_models/yolo11m"   # cambiar por modelo
-os.makedirs(destino, exist_ok=True)
-for f in ["weights/best.pt", "results.csv", "results.png",
-          "confusion_matrix.png", "BoxPR_curve.png"]:
-    shutil.copy(f"runs/detect/train/{f}", destino)
-```
-
-**5. Versionar.** Desde la Mac, bajar esos archivos de Drive a
-`models/<modelo>/` y hacer commit. (No se commitea desde Colab.)
-
-> Parámetros fijos para que la comparación sea justa: mismo `imgsz=640`,
-> `epochs=80` y mismas augmentations en los tres modelos. Lo único que cambia es
-> el peso base (`yolo11m` / `yolo26m` / `yolov8m`).
-
-### Credenciales (local)
-
-Para correr local, la API key se lee de la variable de entorno `ROBOFLOW_API_KEY`
-(nunca hardcodeada en el código):
+### Correr el pipeline / evaluación
 
 ```shell
-export ROBOFLOW_API_KEY="..."
+# 1. Descargar un clip de SoccerNet-Tracking (requiere password del NDA)
+export SOCCERNET_PASSWORD="..."
+uv run python scripts/download_soccernet.py     # baja train.zip; extraer SNMOT-108
+
+# 2. Generar el video con overlay (pipeline completo)
+PYTHONPATH=src uv run python scripts/generar_overlay.py SNMOT-108
+
+# 3. Evaluar posesión contra el ground truth anotado
+PYTHONPATH=src uv run python scripts/evaluar_posesion.py SNMOT-108
 ```
+
+Anotar el ground truth de posesión de un clip (asistente por teclado):
+
+```shell
+uv run python scripts/anotar_posesion.py SNMOT-108   # a/b/n + barra; q guarda
+```
+
+### Entrenamiento del detector en Google Colab
+
+No hace falta clonar el repo: entrenar solo necesita `ultralytics` + el dataset de
+Roboflow. Abrir `notebooks/01_train_detector.ipynb` en Colab (con GPU), que recorre
+los 3 modelos (`yolo11m`, `yolo26m`, `yolov8m`) y guarda los resultados en Drive;
+después se bajan a `models/<modelo>/`. La comparación se cierra con
+`notebooks/02_compare_models.ipynb` (gana **YOLO26m**). Detalle y parámetros en
+[`docs/decisiones/modelo.md`](docs/decisiones/modelo.md).
+
+> La API key de Roboflow viene puesta en el notebook de entrenamiento. Para correr
+> local, se lee de `ROBOFLOW_API_KEY`.
 
 ## Estado del trabajo
 
-- ✅ Etapa 1: detector YOLO entrenado con buenas métricas (mAP@50 ≈ 0.95).
-- ⏳ Comparación normalizada de los 3 modelos en tamaño `m`.
-- ⏳ Etapas 2 y 3 (tracking, posesión, métricas, overlay).
-- ⏳ Ground truth de posesión y evaluación final.
+✅ Las 5 etapas implementadas, integradas en un video con overlay, y validadas con
+métricas (equipos 92-98%, posesión ~76% vs ground truth manual). El recorrido
+completo de experimentos está documentado en `docs/decisiones/`.
